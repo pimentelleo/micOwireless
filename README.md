@@ -164,6 +164,8 @@ SemVer bump rules:
 - `feat:` -> minor
 - anything else -> patch
 
+For Windows trust/reputation, configure Authenticode signing secrets described in `docs/RELEASE.md` (`WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD`).
+
 ## Validation references
 
 - `docs/E2E_VALIDATION_MATRIX.md`

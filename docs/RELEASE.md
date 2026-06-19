@@ -20,6 +20,19 @@ SemVer rules:
 
 If a commit message includes `[skip release]`, the workflow skips creating a release for that push.
 
+### Windows code-signing (Defender/SmartScreen)
+
+To reduce Windows Defender/SmartScreen install blocking, configure Authenticode signing in repository secrets:
+
+1. `WINDOWS_CODESIGN_CERT_PFX_BASE64` - Base64 content of your `.pfx` certificate file.
+2. `WINDOWS_CODESIGN_CERT_PASSWORD` - Password for the `.pfx`.
+3. Optional repository variable: `WINDOWS_CODESIGN_TIMESTAMP_URL` (defaults to `http://timestamp.digicert.com`).
+
+Notes:
+
+- Prefer an EV code-signing certificate for faster SmartScreen reputation.
+- Without these secrets, workflow still publishes Windows artifacts, but they remain unsigned and are more likely to be blocked/warned.
+
 ## Desktop release
 
 ```powershell

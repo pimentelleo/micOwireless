@@ -132,6 +132,70 @@ jobs:
         working-directory: desktop
         run: npm run tauri build
 
+      - name: Check Windows code-signing configuration
+        id: codesign
+        shell: pwsh
+        env:
+          CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+          CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+        run: |
+          $isConfigured = (-not [string]::IsNullOrWhiteSpace($env:CODESIGN_CERT_PFX_BASE64)) -and (-not [string]::IsNullOrWhiteSpace($env:CODESIGN_CERT_PASSWORD))
+          "enabled=$($isConfigured.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $isConfigured) {
+            Write-Host "::warning title=Windows artifacts are unsigned::Configure WINDOWS_CODESIGN_CERT_PFX_BASE64 and WINDOWS_CODESIGN_CERT_PASSWORD repository secrets to reduce Defender/SmartScreen blocking."
+          }
+
+      - name: Decode code-signing certificate
+        if: steps.codesign.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          CODESIGN_CERT_PFX_BASE64: ${{ secrets.WINDOWS_CODESIGN_CERT_PFX_BASE64 }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CODESIGN_CERT_PFX_BASE64))
+
+      - name: Sign Windows binaries and installers
+        if: steps.codesign.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          CODESIGN_CERT_PASSWORD: ${{ secrets.WINDOWS_CODESIGN_CERT_PASSWORD }}
+          CODESIGN_TIMESTAMP_URL: ${{ vars.WINDOWS_CODESIGN_TIMESTAMP_URL }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          $timestampUrl = if ([string]::IsNullOrWhiteSpace($env:CODESIGN_TIMESTAMP_URL)) { "http://timestamp.digicert.com" } else { $env:CODESIGN_TIMESTAMP_URL }
+          $targets = @(
+            "desktop/src-tauri/target/release/*.exe",
+            "desktop/src-tauri/target/release/bundle/msi/*.msi",
+            "desktop/src-tauri/target/release/bundle/nsis/*.exe"
+          )
+          $files = Get-ChildItem -Path $targets -File
+          if ($files.Count -eq 0) {
+            throw "No files found for code signing."
+          }
+          foreach ($file in $files) {
+            & signtool sign /fd SHA256 /f $certPath /p $env:CODESIGN_CERT_PASSWORD /tr $timestampUrl /td SHA256 /v $file.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "Code signing failed for $($file.FullName)."
+            }
+          }
+
+      - name: Verify Authenticode signatures
+        if: steps.codesign.outputs.enabled == 'true'
+        shell: pwsh
+        run: |
+          $targets = @(
+            "desktop/src-tauri/target/release/*.exe",
+            "desktop/src-tauri/target/release/bundle/msi/*.msi",
+            "desktop/src-tauri/target/release/bundle/nsis/*.exe"
+          )
+          $files = Get-ChildItem -Path $targets -File
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($signature.Status -ne "Valid") {
+              throw "Invalid signature for $($file.FullName): $($signature.Status)"
+            }
+          }
+
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
