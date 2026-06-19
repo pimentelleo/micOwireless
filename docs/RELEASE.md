@@ -33,6 +33,12 @@ Notes:
 - Prefer an EV code-signing certificate for faster SmartScreen reputation.
 - Without these secrets, workflow still publishes Windows artifacts, but they remain unsigned and are more likely to be blocked/warned.
 
+## Code signing policy
+
+- [Code signing policy](../CODE_SIGNING_POLICY.md)
+- [Privacy policy](../PRIVACY_POLICY.md)
+- [SignPath readiness checklist](SIGNPATH_READINESS.md)
+
 ## Desktop release
 
 ```powershell

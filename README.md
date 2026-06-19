@@ -48,6 +48,12 @@ If WebView2 installation fails in your environment, install it manually from Mic
    - Tap **Start Streaming**.
 5. In Discord/OBS/Meet, select the virtual cable output as the microphone input.
 
+### Uninstall
+
+1. Windows: open **Settings > Apps > Installed apps**, find **micOwireless Desktop**, and uninstall.
+2. Android: uninstall **micOwireless Mobile** from the system app settings.
+3. Optional: uninstall VB-CABLE separately if you no longer need virtual audio routing.
+
 ## User troubleshooting
 
 - No desktop found on mobile:
@@ -166,6 +172,12 @@ SemVer bump rules:
 
 For Windows trust/reputation, configure Authenticode signing secrets described in `docs/RELEASE.md` (`WINDOWS_CODESIGN_CERT_PFX_BASE64` and `WINDOWS_CODESIGN_CERT_PASSWORD`).
 
+## Code signing policy
+
+- [Code signing policy](CODE_SIGNING_POLICY.md)
+- [Privacy policy](PRIVACY_POLICY.md)
+- [SignPath readiness checklist](docs/SIGNPATH_READINESS.md)
+
 ## Validation references
 
 - `docs/E2E_VALIDATION_MATRIX.md`
@@ -177,6 +189,8 @@ For Windows trust/reputation, configure Authenticode signing secrets described i
 - `LICENSE`
 - `CODE_OF_CONDUCT.md`
 - `CONTRIBUTING.md`
+- `CODE_SIGNING_POLICY.md`
+- `PRIVACY_POLICY.md`
 - `SECURITY.md`
 - `.github/ISSUE_TEMPLATE/*`
 - `.github/pull_request_template.md`
