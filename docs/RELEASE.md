@@ -2,16 +2,21 @@
 
 ## Automated GitHub release (recommended)
 
-Pushing a version tag (`v*`) triggers `.github/workflows/release.yml` to:
+Pushing to `main` triggers `.github/workflows/release.yml` to:
 
-1. Build Windows installers (`.msi` and NSIS `.exe`).
-2. Build Android release APK.
-3. Publish all binaries directly to the matching GitHub Release.
+1. Calculate next SemVer from commit messages.
+2. Build Windows installers (`.msi` and NSIS `.exe`).
+3. Build Android release APK.
+4. Create tag `vX.Y.Z`.
+5. Publish all binaries directly to the matching GitHub Release.
 
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
+SemVer rules:
+
+- `BREAKING CHANGE` or `type(scope)!:` -> major
+- `feat:` -> minor
+- anything else -> patch
+
+If a commit message includes `[skip release]`, the workflow skips creating a release for that push.
 
 ## Desktop release
 

@@ -147,7 +147,18 @@ cargo test
 
 ### Release automation
 
-Version tags in the format `v*` trigger `.github/workflows/release.yml`, which builds Windows installers (`.msi` + `.exe`) and Android release APK, then publishes all assets to the matching GitHub Release.
+Every push to `main` triggers `.github/workflows/release.yml`, which:
+
+1. Calculates the next SemVer automatically from commit messages.
+2. Builds Windows installers (`.msi` + `.exe`) and Android release APK.
+3. Creates the release tag (`vX.Y.Z`) in the same workflow.
+4. Publishes all assets to the matching GitHub Release.
+
+SemVer bump rules:
+
+- `BREAKING CHANGE` or `type(scope)!:` -> major
+- `feat:` -> minor
+- anything else -> patch
 
 ## Validation references
 
