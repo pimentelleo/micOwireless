@@ -229,6 +229,6 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            release-assets/windows/*.msi
-            release-assets/windows/*.exe
-            release-assets/mobile/*.apk
+            release-assets/windows/**/*.msi
+            release-assets/windows/**/*.exe
+            release-assets/mobile/**/*.apk
