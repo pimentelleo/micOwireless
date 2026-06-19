@@ -1,0 +1,15 @@
+# Flutter
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+
+# Node / Tauri
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+
+# OS
+Thumbs.db
+Desktop.ini
