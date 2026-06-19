@@ -10,18 +10,19 @@ If you only want to use the app (not develop it), follow this section.
 
 Get the latest binaries from GitHub Releases:
 
-- Release page: `https://github.com/pimentelleo/micOwireless/releases`
+- Release page: [https://github.com/pimentelleo/micOwireless/releases](https://github.com/pimentelleo/micOwireless/releases)
 - Windows installer: `.msi` or `.exe`
 - Android app: `.apk`
 
 ### What to install on Windows
 
 1. **micOwireless Desktop** (`.msi` or `.exe`) from the latest release.
-2. **Optional (recommended for Discord/OBS/Meet):** VB-CABLE or another virtual audio cable.
+2. **Optional (recommended for Discord/OBS/Meet):** [VB-CABLE](https://vb-audio.com/Cable/) or another virtual audio cable.
 3. The installer automatically handles **WebView2 runtime** (offline mode), so no manual WebView setup is needed.
 4. Nothing else is required for end users (no Node.js, Rust, or Visual Studio tools).
 
-Note: VB-CABLE is a third-party driver and remains an optional separate install.
+Note: VB-CABLE is a third-party driver and remains an optional separate install.  
+If WebView2 installation fails in your environment, install it manually from Microsoft: [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 ### Minimum user requirements
 
@@ -88,14 +89,14 @@ Note: VB-CABLE is a third-party driver and remains an optional separate install.
 
 #### Windows desktop
 
-1. Node.js 20+
-2. Rust (MSVC target)
-3. Visual Studio 2022 Build Tools with C++ workload
+1. [Node.js 20+](https://nodejs.org/en/download)
+2. [Rust (rustup, MSVC target)](https://rustup.rs/)
+3. [Visual Studio 2022 Build Tools (Desktop development with C++)](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
 #### Mobile
 
-1. Flutter SDK (recommended via Puro)
-2. Android Studio/Xcode as needed for target platform
+1. [Flutter SDK](https://docs.flutter.dev/get-started/install) (recommended via [Puro](https://puro.dev/))
+2. [Android Studio](https://developer.android.com/studio) / [Xcode](https://developer.apple.com/xcode/) as needed for target platform
 
 ### Setup
 
