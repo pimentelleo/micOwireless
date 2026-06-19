@@ -10,6 +10,8 @@ Pushing to `main` triggers `.github/workflows/release.yml` to:
 4. Create tag `vX.Y.Z`.
 5. Publish all binaries directly to the matching GitHub Release.
 
+Windows bundles are generated with `webviewInstallMode = offlineInstaller`, so the installer includes WebView2 runtime setup for end users.
+
 SemVer rules:
 
 - `BREAKING CHANGE` or `type(scope)!:` -> major
