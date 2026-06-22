@@ -2,6 +2,13 @@
 
 Open-source wireless microphone system inspired by WoMIC, with glassmorphism UI and Material 3 design language.
 
+## What this app does
+
+- Uses your Android phone microphone as a wireless mic for your Windows PC.
+- Solves the "no mic / bad mic on PC" problem for calls and streaming tools.
+- Routes audio to apps like Discord, OBS, and Meet (optionally via virtual audio cable).
+- Streams over local Wi-Fi with desktop discovery and optional pair-code encryption.
+
 ## User quick start (Windows + Android)
 
 If you only want to use the app (not develop it), follow this section.
@@ -77,14 +84,6 @@ WebView2 is not bundled in the installer. If your environment does not have it, 
   - Keep the app updated (Android now uses a foreground streaming service).
   - Do not dismiss the persistent streaming notification while transmitting.
   - Set battery mode to unrestricted for micOwireless on aggressive OEM ROMs.
-
-## What it does (technical summary)
-
-- Turns your phone into a wireless microphone for Windows.
-- Streams PCM16 audio from mobile to desktop over UDP.
-- Supports local-network desktop discovery.
-- Supports pair-code encryption (ChaCha20-Poly1305).
-- Includes jitter-tolerant playback and packet-loss concealment.
 
 ## For developers
 
