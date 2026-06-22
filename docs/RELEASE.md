@@ -5,7 +5,7 @@
 Pushing to `main` triggers `.github/workflows/release.yml` to:
 
 1. Calculate next SemVer from commit messages.
-2. Build Windows installers (`.msi` and NSIS `.exe`).
+2. Build Windows installers (`.msi` and NSIS `.exe`) and a portable Windows ZIP (`.zip`).
 3. Build Android release APK.
 4. Create tag `vX.Y.Z`.
 5. Publish all binaries directly to the matching GitHub Release.
@@ -50,6 +50,7 @@ npm run tauri build
 Generated artifacts are in:
 
 - `desktop/src-tauri/target/release/bundle/`
+- `desktop/src-tauri/target/release/bundle/portable/` (portable ZIP)
 
 ## Mobile release (Android example)
 

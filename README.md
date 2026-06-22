@@ -12,11 +12,14 @@ Get the latest binaries from GitHub Releases:
 
 - Release page: [https://github.com/pimentelleo/micOwireless/releases](https://github.com/pimentelleo/micOwireless/releases)
 - Windows installer: `.msi` or `.exe`
+- Windows portable: `.zip` (extract and run, no installation)
 - Android app: `.apk`
 
 ### What to install on Windows
 
-1. **micOwireless Desktop** (`.msi` or `.exe`) from the latest release.
+1. **micOwireless Desktop** from the latest release:
+   - Installer mode: `.msi` or `.exe`
+   - Portable mode: `.zip` (extract and run `micOwireless-desktop.exe`)
 2. **Optional (recommended for Discord/OBS/Meet):** [VB-CABLE](https://vb-audio.com/Cable/) or another virtual audio cable.
 3. **WebView2 Runtime** (usually already available on Windows 10/11).
 4. Nothing else is required for end users (no Node.js, Rust, or Visual Studio tools).
@@ -33,7 +36,7 @@ WebView2 is not bundled in the installer. If your environment does not have it, 
 
 ## How to use
 
-1. Install and open **micOwireless Desktop** on Windows.
+1. Open **micOwireless Desktop** on Windows (`.msi/.exe` install or portable `.zip` extraction).
 2. In Desktop:
    - Keep port `49000` (or choose another one).
    - Choose output device:
@@ -50,9 +53,10 @@ WebView2 is not bundled in the installer. If your environment does not have it, 
 
 ### Uninstall
 
-1. Windows: open **Settings > Apps > Installed apps**, find **micOwireless Desktop**, and uninstall.
-2. Android: uninstall **micOwireless Mobile** from the system app settings.
-3. Optional: uninstall VB-CABLE separately if you no longer need virtual audio routing.
+1. Windows (installer mode): open **Settings > Apps > Installed apps**, find **micOwireless Desktop**, and uninstall.
+2. Windows (portable mode): delete the extracted portable folder.
+3. Android: uninstall **micOwireless Mobile** from the system app settings.
+4. Optional: uninstall VB-CABLE separately if you no longer need virtual audio routing.
 
 ## User troubleshooting
 
@@ -160,7 +164,7 @@ cargo test
 Every push to `main` triggers `.github/workflows/release.yml`, which:
 
 1. Calculates the next SemVer automatically from commit messages.
-2. Builds Windows installers (`.msi` + `.exe`) and Android release APK.
+2. Builds Windows installers (`.msi` + `.exe`), Windows portable ZIP (`.zip`), and Android release APK.
 3. Creates the release tag (`vX.Y.Z`) in the same workflow.
 4. Publishes all assets to the matching GitHub Release.
 

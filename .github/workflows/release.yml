@@ -101,7 +101,7 @@ jobs:
           echo "previous_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
 
   build-windows:
-    name: Build Windows installers
+    name: Build Windows artifacts
     runs-on: windows-latest
     needs: prepare-version
     if: needs.prepare-version.outputs.should_release == 'true'
@@ -196,6 +196,38 @@ jobs:
             }
           }
 
+      - name: Package portable desktop ZIP
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.prepare-version.outputs.release_tag }}
+        run: |
+          $binaryPath = "desktop/src-tauri/target/release/micowireless-desktop.exe"
+          if (-not (Test-Path $binaryPath)) {
+            throw "Portable binary not found at $binaryPath."
+          }
+
+          $portableStagingDir = "desktop/src-tauri/target/release/portable"
+          $portableBundleDir = "desktop/src-tauri/target/release/bundle/portable"
+          New-Item -Path $portableStagingDir -ItemType Directory -Force | Out-Null
+          New-Item -Path $portableBundleDir -ItemType Directory -Force | Out-Null
+
+          Copy-Item $binaryPath -Destination (Join-Path $portableStagingDir "micOwireless-desktop.exe") -Force
+          Copy-Item "README.md" -Destination (Join-Path $portableStagingDir "README.md") -Force
+
+          @(
+            "micOwireless Desktop Portable ($($env:RELEASE_TAG))"
+            ""
+            "1. Ensure Microsoft Edge WebView2 Runtime is installed."
+            "2. Run micOwireless-desktop.exe."
+            "3. Optional: install VB-CABLE for virtual microphone routing."
+          ) | Set-Content -Path (Join-Path $portableStagingDir "PORTABLE.txt") -Encoding Ascii
+
+          $zipPath = Join-Path $portableBundleDir "micOwireless-desktop-portable-$($env:RELEASE_TAG).zip"
+          if (Test-Path $zipPath) {
+            Remove-Item $zipPath -Force
+          }
+          Compress-Archive -Path "$portableStagingDir\*" -DestinationPath $zipPath
+
       - name: Upload Windows installers
         uses: actions/upload-artifact@v4
         with:
@@ -204,6 +236,7 @@ jobs:
           path: |
             desktop/src-tauri/target/release/bundle/msi/*.msi
             desktop/src-tauri/target/release/bundle/nsis/*.exe
+            desktop/src-tauri/target/release/bundle/portable/*.zip
 
   build-android:
     name: Build Android APK
@@ -295,4 +328,5 @@ jobs:
           files: |
             release-assets/windows/**/*.msi
             release-assets/windows/**/*.exe
+            release-assets/windows/**/*.zip
             release-assets/mobile/**/*.apk
