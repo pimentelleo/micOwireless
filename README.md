@@ -18,11 +18,11 @@ Get the latest binaries from GitHub Releases:
 
 1. **micOwireless Desktop** (`.msi` or `.exe`) from the latest release.
 2. **Optional (recommended for Discord/OBS/Meet):** [VB-CABLE](https://vb-audio.com/Cable/) or another virtual audio cable.
-3. The installer automatically handles **WebView2 runtime** (offline mode), so no manual WebView setup is needed.
+3. **WebView2 Runtime** (usually already available on Windows 10/11).
 4. Nothing else is required for end users (no Node.js, Rust, or Visual Studio tools).
 
 Note: VB-CABLE is a third-party driver and remains an optional separate install.  
-If WebView2 installation fails in your environment, install it manually from Microsoft: [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
+WebView2 is not bundled in the installer. If your environment does not have it, install it manually from Microsoft: [WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 ### Minimum user requirements
 
