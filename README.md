@@ -4,14 +4,16 @@ Open-source wireless microphone system inspired by WoMIC, with glassmorphism UI 
 
 ## What this app does
 
+- It is a single system that requires **both apps together**: Android (microphone sender) + Windows (audio receiver).
 - Uses your Android phone microphone as a wireless mic for your Windows PC.
 - Solves the "no mic / bad mic on PC" problem for calls and streaming tools.
 - Routes audio to apps like Discord, OBS, and Meet (optionally via virtual audio cable).
 - Streams over local Wi-Fi with desktop discovery and optional pair-code encryption.
 
-## User quick start (Windows + Android)
+## User quick start (Windows + Android together)
 
-If you only want to use the app (not develop it), follow this section.
+If you only want to use the app (not develop it), follow this section.  
+Important: this is **not** two standalone apps — the Android app depends on the Windows app running, and vice versa.
 
 ### Download
 
