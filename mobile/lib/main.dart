@@ -7,6 +7,7 @@ import 'dart:ui';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
 import 'stream_protocol.dart';
@@ -14,6 +15,10 @@ import 'stream_protocol.dart';
 const _defaultPort = 49000;
 const _defaultSampleRate = 48000;
 const _defaultChannels = 1;
+const _packetDurationOptionsMs = [10, 20, 30, 40, 60];
+const _androidStreamServiceChannel = MethodChannel(
+  'dev.micowireless.micowireless_mobile/stream_service',
+);
 
 void main() {
   runApp(const MicOWirelessApp());
@@ -43,6 +48,47 @@ class StreamControlPage extends StatefulWidget {
   State<StreamControlPage> createState() => _StreamControlPageState();
 }
 
+class _StreamingTuningConfig {
+  const _StreamingTuningConfig({
+    required this.packetDurationMs,
+    required this.channels,
+    required this.autoGain,
+    required this.echoCancel,
+    required this.noiseSuppress,
+  });
+
+  final int packetDurationMs;
+  final int channels;
+  final bool autoGain;
+  final bool echoCancel;
+  final bool noiseSuppress;
+
+  int get packetSamples =>
+      (((_defaultSampleRate * packetDurationMs) ~/ 1000).clamp(1, 100000) as int) *
+      channels;
+
+  int get packetBytes => packetSamples * 2;
+
+  double get estimatedBitrateKbps =>
+      (_defaultSampleRate * channels * 16) / 1000;
+
+  _StreamingTuningConfig copyWith({
+    int? packetDurationMs,
+    int? channels,
+    bool? autoGain,
+    bool? echoCancel,
+    bool? noiseSuppress,
+  }) {
+    return _StreamingTuningConfig(
+      packetDurationMs: packetDurationMs ?? this.packetDurationMs,
+      channels: channels ?? this.channels,
+      autoGain: autoGain ?? this.autoGain,
+      echoCancel: echoCancel ?? this.echoCancel,
+      noiseSuppress: noiseSuppress ?? this.noiseSuppress,
+    );
+  }
+}
+
 class _StreamControlPageState extends State<StreamControlPage> {
   final _recorder = AudioRecorder();
   final _targetIpController = TextEditingController(text: '192.168.1.100');
@@ -56,6 +102,13 @@ class _StreamControlPageState extends State<StreamControlPage> {
   bool _isStreaming = false;
   bool _discovering = false;
   bool _secureMode = true;
+  _StreamingTuningConfig _streamingTuning = const _StreamingTuningConfig(
+    packetDurationMs: 20,
+    channels: _defaultChannels,
+    autoGain: true,
+    echoCancel: true,
+    noiseSuppress: true,
+  );
   String _statusMessage = 'Ready to stream';
   String? _errorMessage;
   int _packetsSent = 0;
@@ -65,6 +118,7 @@ class _StreamControlPageState extends State<StreamControlPage> {
 
   @override
   void dispose() {
+    unawaited(_stopAndroidKeepAliveService());
     _audioSubscription?.cancel();
     _udpSocket?.close();
     _recorder.dispose();
@@ -185,6 +239,7 @@ class _StreamControlPageState extends State<StreamControlPage> {
     final ip = InternetAddress.tryParse(_targetIpController.text.trim());
     final port = int.tryParse(_portController.text.trim());
     final pairCode = _pairCodeController.text.trim();
+    final tuning = _streamingTuning;
 
     if (ip == null) {
       setState(() => _errorMessage = 'Enter a valid desktop IPv4 address.');
@@ -198,6 +253,16 @@ class _StreamControlPageState extends State<StreamControlPage> {
       setState(
         () => _errorMessage = 'Pair code must have at least 6 characters.',
       );
+      return;
+    }
+    if (tuning.packetDurationMs < 10 || tuning.packetDurationMs > 60) {
+      setState(
+        () => _errorMessage = 'Packet duration must be between 10 and 60 ms.',
+      );
+      return;
+    }
+    if (tuning.channels < 1 || tuning.channels > 2) {
+      setState(() => _errorMessage = 'Channel count must be mono or stereo.');
       return;
     }
 
@@ -216,17 +281,20 @@ class _StreamControlPageState extends State<StreamControlPage> {
     final sessionId = (random.nextInt(1 << 32) << 32) | random.nextInt(1 << 32);
     var packetCounter = 0;
     var nextSequence = 0;
+    final packetBytes = tuning.packetBytes;
+    final pendingAudioBytes = <int>[];
 
     try {
+      await _startAndroidKeepAliveService();
       final socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       final stream = await _recorder.startStream(
-        const RecordConfig(
+        RecordConfig(
           encoder: AudioEncoder.pcm16bits,
           sampleRate: _defaultSampleRate,
-          numChannels: _defaultChannels,
-          autoGain: true,
-          echoCancel: true,
-          noiseSuppress: true,
+          numChannels: tuning.channels,
+          autoGain: tuning.autoGain,
+          echoCancel: tuning.echoCancel,
+          noiseSuppress: tuning.noiseSuppress,
         ),
       );
 
@@ -234,7 +302,8 @@ class _StreamControlPageState extends State<StreamControlPage> {
         _udpSocket = socket;
         _isStreaming = true;
         _sessionId = sessionId;
-        _statusMessage = 'Streaming to ${ip.address}:$port';
+        _statusMessage =
+            'Streaming to ${ip.address}:$port • ${tuning.packetDurationMs}ms packets • ${tuning.channels == 1 ? 'mono' : 'stereo'}';
         _errorMessage = null;
         _packetsSent = 0;
         _streamingSince = DateTime.now();
@@ -243,35 +312,45 @@ class _StreamControlPageState extends State<StreamControlPage> {
       _sendQueue = Future<void>.value();
       final subscription = stream.listen(
         (audioChunk) {
-          final packetSequence = nextSequence++;
-          _sendQueue = _sendQueue
-              .then((_) async {
-                if (!_isStreaming) {
-                  return;
-                }
-                final packet = await buildAudioPacket(
-                  sequence: packetSequence,
-                  sessionId: sessionId,
-                  sampleRate: _defaultSampleRate,
-                  channels: _defaultChannels,
-                  pcm16Payload: audioChunk,
-                  secureMode: _secureMode,
-                  pairingKey: secureKey,
-                );
-                final sent = socket.send(packet, ip, port);
-                if (sent <= 0) {
-                  throw StateError('UDP packet could not be sent.');
-                }
-                packetCounter += 1;
-                if (packetCounter % 20 == 0 && mounted) {
-                  setState(() => _packetsSent = packetCounter);
-                }
-              })
-              .catchError((Object error) {
-                if (!mounted) return;
-                setState(() => _errorMessage = 'Streaming failed: $error');
-                unawaited(_stopStreaming());
-              });
+          if (!_isStreaming) {
+            return;
+          }
+          pendingAudioBytes.addAll(audioChunk);
+          while (pendingAudioBytes.length >= packetBytes) {
+            final pcmPayload = Uint8List.fromList(
+              pendingAudioBytes.sublist(0, packetBytes),
+            );
+            pendingAudioBytes.removeRange(0, packetBytes);
+            final packetSequence = nextSequence++;
+            _sendQueue = _sendQueue
+                .then((_) async {
+                  if (!_isStreaming) {
+                    return;
+                  }
+                  final packet = await buildAudioPacket(
+                    sequence: packetSequence,
+                    sessionId: sessionId,
+                    sampleRate: _defaultSampleRate,
+                    channels: tuning.channels,
+                    pcm16Payload: pcmPayload,
+                    secureMode: _secureMode,
+                    pairingKey: secureKey,
+                  );
+                  final sent = socket.send(packet, ip, port);
+                  if (sent <= 0) {
+                    throw StateError('UDP packet could not be sent.');
+                  }
+                  packetCounter += 1;
+                  if (packetCounter % 20 == 0 && mounted) {
+                    setState(() => _packetsSent = packetCounter);
+                  }
+                })
+                .catchError((Object error) {
+                  if (!mounted) return;
+                  setState(() => _errorMessage = 'Streaming failed: $error');
+                  unawaited(_stopStreaming());
+                });
+          }
         },
         onError: (Object error) {
           if (!mounted) return;
@@ -285,6 +364,7 @@ class _StreamControlPageState extends State<StreamControlPage> {
       if (await _recorder.isRecording()) {
         await _recorder.stop();
       }
+      await _stopAndroidKeepAliveService();
       if (!mounted) return;
       setState(() {
         _errorMessage = 'Could not start streaming: $error';
@@ -326,6 +406,7 @@ class _StreamControlPageState extends State<StreamControlPage> {
     if (await _recorder.isRecording()) {
       await _recorder.stop();
     }
+    await _stopAndroidKeepAliveService();
 
     if (!mounted) return;
     setState(() {
@@ -333,6 +414,24 @@ class _StreamControlPageState extends State<StreamControlPage> {
       _streamingSince = null;
       _sessionId = 0;
     });
+  }
+
+  Future<void> _startAndroidKeepAliveService() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    await _androidStreamServiceChannel.invokeMethod<void>('start');
+  }
+
+  Future<void> _stopAndroidKeepAliveService() async {
+    if (!Platform.isAndroid) {
+      return;
+    }
+    try {
+      await _androidStreamServiceChannel.invokeMethod<void>('stop');
+    } catch (_) {
+      // Stop should not block UI teardown.
+    }
   }
 
   void _applyDiscovery(_DiscoveredDesktop desktop) {
@@ -551,6 +650,12 @@ class _StreamControlPageState extends State<StreamControlPage> {
                                 color: theme.colorScheme.secondary,
                               ),
                               _StatusChip(
+                                icon: Icons.tune,
+                                label:
+                                    '${_streamingTuning.packetDurationMs}ms • ${_streamingTuning.channels == 1 ? 'Mono' : 'Stereo'}',
+                                color: theme.colorScheme.primary,
+                              ),
+                              _StatusChip(
                                 icon: Icons.timer_outlined,
                                 label: 'Uptime: ${uptime.inSeconds}s',
                                 color: theme.colorScheme.tertiary,
@@ -597,15 +702,136 @@ class _StreamControlPageState extends State<StreamControlPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Audio Profile',
+                            'Streaming Lab (Experimental)',
                             style: theme.textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w700,
                             ),
                           ),
                           const SizedBox(height: 8),
+                          DropdownButtonFormField<int>(
+                            value: _streamingTuning.packetDurationMs,
+                            decoration: const InputDecoration(
+                              labelText: 'Packet Duration',
+                              prefixIcon: Icon(Icons.timer_outlined),
+                            ),
+                            items: _packetDurationOptionsMs
+                                .map(
+                                  (ms) => DropdownMenuItem<int>(
+                                    value: ms,
+                                    child: Text('$ms ms'),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _isStreaming
+                                ? null
+                                : (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      _streamingTuning = _streamingTuning.copyWith(
+                                        packetDurationMs: value,
+                                      );
+                                    });
+                                  },
+                          ),
+                          const SizedBox(height: 10),
+                          DropdownButtonFormField<int>(
+                            value: _streamingTuning.channels,
+                            decoration: const InputDecoration(
+                              labelText: 'Channels',
+                              prefixIcon: Icon(Icons.surround_sound_outlined),
+                            ),
+                            items: const [
+                              DropdownMenuItem<int>(value: 1, child: Text('Mono')),
+                              DropdownMenuItem<int>(value: 2, child: Text('Stereo')),
+                            ],
+                            onChanged: _isStreaming
+                                ? null
+                                : (value) {
+                                    if (value == null) return;
+                                    setState(() {
+                                      _streamingTuning = _streamingTuning.copyWith(
+                                        channels: value,
+                                      );
+                                    });
+                                  },
+                          ),
+                          const SizedBox(height: 4),
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Automatic Gain Control (AGC)'),
+                            value: _streamingTuning.autoGain,
+                            onChanged: _isStreaming
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _streamingTuning = _streamingTuning.copyWith(
+                                        autoGain: value,
+                                      );
+                                    });
+                                  },
+                          ),
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Echo Cancellation'),
+                            value: _streamingTuning.echoCancel,
+                            onChanged: _isStreaming
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _streamingTuning = _streamingTuning.copyWith(
+                                        echoCancel: value,
+                                      );
+                                    });
+                                  },
+                          ),
+                          SwitchListTile.adaptive(
+                            contentPadding: EdgeInsets.zero,
+                            title: const Text('Noise Suppression'),
+                            value: _streamingTuning.noiseSuppress,
+                            onChanged: _isStreaming
+                                ? null
+                                : (value) {
+                                    setState(() {
+                                      _streamingTuning = _streamingTuning.copyWith(
+                                        noiseSuppress: value,
+                                      );
+                                    });
+                                  },
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _StatusChip(
+                                icon: Icons.speed,
+                                label:
+                                    'Packets/s: ${(1000 / _streamingTuning.packetDurationMs).toStringAsFixed(1)}',
+                                color: theme.colorScheme.secondary,
+                              ),
+                              _StatusChip(
+                                icon: Icons.network_check,
+                                label:
+                                    'Bitrate: ${_streamingTuning.estimatedBitrateKbps.toStringAsFixed(0)} kbps',
+                                color: theme.colorScheme.primary,
+                              ),
+                              _StatusChip(
+                                icon: Icons.data_array,
+                                label:
+                                    'Payload: ${_streamingTuning.packetBytes} bytes',
+                                color: theme.colorScheme.tertiary,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
                           Text(
-                            'Protocol $protocolName • PCM 16-bit • $_defaultSampleRate Hz • Mono • UDP + jitter-safe receiver',
+                            'Protocol $protocolName • PCM 16-bit • $_defaultSampleRate Hz • ${_streamingTuning.channels == 1 ? 'Mono' : 'Stereo'} • UDP + jitter-safe receiver',
                             style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Use lower packet duration for less delay and higher values for smoother audio on unstable networks.',
+                            style: theme.textTheme.bodySmall,
                           ),
                         ],
                       ),

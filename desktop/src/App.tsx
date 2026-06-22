@@ -12,6 +12,8 @@ type ReceiverStatus = {
   lastError: string | null;
 };
 
+const receiverSampleRate = 48_000;
+
 const defaultStatus: ReceiverStatus = {
   running: false,
   packetsReceived: 0,
@@ -37,6 +39,9 @@ function App() {
   const [localIps, setLocalIps] = useState<string[]>([]);
   const [secureMode, setSecureMode] = useState(true);
   const [pairCode, setPairCode] = useState(() => generatePairCode());
+  const [jitterStartupPackets, setJitterStartupPackets] = useState("4");
+  const [jitterMaxPendingPackets, setJitterMaxPendingPackets] = useState("32");
+  const [maxBufferMs, setMaxBufferMs] = useState("5000");
   const [status, setStatus] = useState<ReceiverStatus>(defaultStatus);
   const [notice, setNotice] = useState(
     "Start receiver, then use Discover in the mobile app.",
@@ -87,6 +92,19 @@ function App() {
 
   const parsedPort = useMemo(() => Number(port), [port]);
   const discoveryPort = useMemo(() => parsedPort + 1, [parsedPort]);
+  const parsedJitterStartupPackets = useMemo(
+    () => Number(jitterStartupPackets),
+    [jitterStartupPackets],
+  );
+  const parsedJitterMaxPendingPackets = useMemo(
+    () => Number(jitterMaxPendingPackets),
+    [jitterMaxPendingPackets],
+  );
+  const parsedMaxBufferMs = useMemo(() => Number(maxBufferMs), [maxBufferMs]);
+  const parsedMaxBufferSamples = useMemo(
+    () => Math.round((receiverSampleRate * parsedMaxBufferMs) / 1000),
+    [parsedMaxBufferMs],
+  );
 
   const handleStart = async () => {
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65534) {
@@ -97,6 +115,34 @@ function App() {
       setError("Pair code must contain at least 6 characters.");
       return;
     }
+    if (
+      !Number.isInteger(parsedJitterStartupPackets) ||
+      parsedJitterStartupPackets < 1 ||
+      parsedJitterStartupPackets > 24
+    ) {
+      setError("Jitter startup packets must be between 1 and 24.");
+      return;
+    }
+    if (
+      !Number.isInteger(parsedJitterMaxPendingPackets) ||
+      parsedJitterMaxPendingPackets < 4 ||
+      parsedJitterMaxPendingPackets > 256
+    ) {
+      setError("Jitter max pending packets must be between 4 and 256.");
+      return;
+    }
+    if (parsedJitterStartupPackets > parsedJitterMaxPendingPackets) {
+      setError("Jitter startup packets cannot exceed max pending packets.");
+      return;
+    }
+    if (
+      !Number.isFinite(parsedMaxBufferMs) ||
+      parsedMaxBufferMs < 100 ||
+      parsedMaxBufferMs > 10000
+    ) {
+      setError("Max output buffer must be between 100 and 10000 ms.");
+      return;
+    }
 
     setError(null);
     try {
@@ -105,9 +151,14 @@ function App() {
         deviceName: selectedDevice || null,
         secureMode,
         pairCode: secureMode ? pairCode.trim() : null,
+        receiverTuning: {
+          jitterStartupPackets: parsedJitterStartupPackets,
+          jitterMaxPendingPackets: parsedJitterMaxPendingPackets,
+          maxBufferSamples: parsedMaxBufferSamples,
+        },
       });
       setNotice(
-        `Receiver online on UDP ${parsedPort}. Discovery listens on UDP ${discoveryPort}.`,
+        `Receiver online on UDP ${parsedPort} (jitter ${parsedJitterStartupPackets}/${parsedJitterMaxPendingPackets}, buffer ${parsedMaxBufferMs} ms). Discovery listens on UDP ${discoveryPort}.`,
       );
     } catch (err) {
       setError(String(err));
@@ -186,6 +237,54 @@ function App() {
       </section>
 
       <section className="glass-card">
+        <h2>Receiver Tuning (Experimental)</h2>
+        <div className="settings-grid">
+          <div>
+            <label htmlFor="jitter-startup-packets">Jitter Startup Packets</label>
+            <input
+              id="jitter-startup-packets"
+              value={jitterStartupPackets}
+              onChange={(event) => setJitterStartupPackets(event.currentTarget.value)}
+              placeholder="4"
+              inputMode="numeric"
+              disabled={status.running}
+            />
+            <small>
+              Lower = lower latency, higher = smoother under unstable Wi-Fi.
+            </small>
+          </div>
+          <div>
+            <label htmlFor="jitter-max-pending">Jitter Max Pending Packets</label>
+            <input
+              id="jitter-max-pending"
+              value={jitterMaxPendingPackets}
+              onChange={(event) => setJitterMaxPendingPackets(event.currentTarget.value)}
+              placeholder="32"
+              inputMode="numeric"
+              disabled={status.running}
+            />
+            <small>
+              Safety window for out-of-order packets before silence insertion.
+            </small>
+          </div>
+          <div>
+            <label htmlFor="max-buffer-ms">Max Output Buffer (ms)</label>
+            <input
+              id="max-buffer-ms"
+              value={maxBufferMs}
+              onChange={(event) => setMaxBufferMs(event.currentTarget.value)}
+              placeholder="5000"
+              inputMode="numeric"
+              disabled={status.running}
+            />
+            <small>
+              Higher values prevent crackling on bad networks but increase delay.
+            </small>
+          </div>
+        </div>
+      </section>
+
+      <section className="glass-card">
         <h2>Security & Pairing</h2>
         <label className="switch-row">
           <input
@@ -238,6 +337,10 @@ function App() {
           <span className="chip">Decrypt Failures: {status.decryptFailures}</span>
           <span className="chip">Parse Errors: {status.parseErrors}</span>
           <span className="chip">Output: {selectedDeviceLabel}</span>
+          <span className="chip">
+            Jitter: {jitterStartupPackets}/{jitterMaxPendingPackets}
+          </span>
+          <span className="chip">Buffer: {maxBufferMs} ms</span>
         </div>
         <p>{notice}</p>
         {status.lastError ? <p className="error">{status.lastError}</p> : null}

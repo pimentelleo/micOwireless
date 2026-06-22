@@ -11,7 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-const MAX_BUFFER_SAMPLES: usize = 240_000;
+const DEFAULT_MAX_BUFFER_SAMPLES: usize = 240_000;
+const MIN_BUFFER_SAMPLES: usize = 4_800;
+const MAX_BUFFER_SAMPLES: usize = 480_000;
 const UDP_PACKET_SIZE: usize = 8192;
 const DISCOVERY_PORT_OFFSET: u16 = 1;
 
@@ -22,8 +24,12 @@ const PROTOCOL_HEADER_LEN: usize = 28;
 const PROTOCOL_FLAG_ENCRYPTED: u8 = 0x01;
 const PROTOCOL_PAYLOAD_PCM16: u16 = 1;
 
-const JITTER_STARTUP_PACKETS: usize = 4;
-const JITTER_MAX_PENDING: usize = 32;
+const DEFAULT_JITTER_STARTUP_PACKETS: usize = 4;
+const DEFAULT_JITTER_MAX_PENDING: usize = 32;
+const MIN_JITTER_STARTUP_PACKETS: usize = 1;
+const MAX_JITTER_STARTUP_PACKETS: usize = 24;
+const MIN_JITTER_MAX_PENDING_PACKETS: usize = 4;
+const MAX_JITTER_MAX_PENDING_PACKETS: usize = 256;
 const DEFAULT_PACKET_SAMPLES: usize = 480;
 
 #[derive(Default)]
@@ -54,6 +60,57 @@ struct ReceiverConfig {
     device_name: Option<String>,
     secure_mode: bool,
     pair_code: Option<String>,
+    jitter_startup_packets: usize,
+    jitter_max_pending_packets: usize,
+    max_buffer_samples: usize,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ReceiverTuning {
+    jitter_startup_packets: usize,
+    jitter_max_pending_packets: usize,
+    max_buffer_samples: usize,
+}
+
+impl Default for ReceiverTuning {
+    fn default() -> Self {
+        Self {
+            jitter_startup_packets: DEFAULT_JITTER_STARTUP_PACKETS,
+            jitter_max_pending_packets: DEFAULT_JITTER_MAX_PENDING,
+            max_buffer_samples: DEFAULT_MAX_BUFFER_SAMPLES,
+        }
+    }
+}
+
+impl ReceiverTuning {
+    fn validate(&self) -> Result<(), String> {
+        if !(MIN_JITTER_STARTUP_PACKETS..=MAX_JITTER_STARTUP_PACKETS)
+            .contains(&self.jitter_startup_packets)
+        {
+            return Err(format!(
+                "Jitter startup packets must be between {MIN_JITTER_STARTUP_PACKETS} and {MAX_JITTER_STARTUP_PACKETS}.",
+            ));
+        }
+        if !(MIN_JITTER_MAX_PENDING_PACKETS..=MAX_JITTER_MAX_PENDING_PACKETS)
+            .contains(&self.jitter_max_pending_packets)
+        {
+            return Err(format!(
+                "Jitter max pending packets must be between {MIN_JITTER_MAX_PENDING_PACKETS} and {MAX_JITTER_MAX_PENDING_PACKETS}.",
+            ));
+        }
+        if self.jitter_startup_packets > self.jitter_max_pending_packets {
+            return Err(String::from(
+                "Jitter startup packets cannot exceed jitter max pending packets.",
+            ));
+        }
+        if !(MIN_BUFFER_SAMPLES..=MAX_BUFFER_SAMPLES).contains(&self.max_buffer_samples) {
+            return Err(format!(
+                "Output buffer samples must be between {MIN_BUFFER_SAMPLES} and {MAX_BUFFER_SAMPLES}.",
+            ));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize)]
@@ -202,6 +259,7 @@ fn start_receiver(
     device_name: Option<String>,
     secure_mode: bool,
     pair_code: Option<String>,
+    receiver_tuning: Option<ReceiverTuning>,
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
     if port == 0 || port == u16::MAX {
@@ -217,6 +275,8 @@ fn start_receiver(
             return Err(String::from("Secure mode requires a pair code."));
         }
     }
+    let tuning = receiver_tuning.unwrap_or_default();
+    tuning.validate()?;
 
     {
         let guard = state
@@ -243,6 +303,9 @@ fn start_receiver(
         device_name,
         secure_mode,
         pair_code,
+        jitter_startup_packets: tuning.jitter_startup_packets,
+        jitter_max_pending_packets: tuning.jitter_max_pending_packets,
+        max_buffer_samples: tuning.max_buffer_samples,
     };
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -351,7 +414,7 @@ fn run_receiver(
     let host = cpal::default_host();
     let device = select_output_device(&host, config.device_name.as_deref())?;
     let queue = Arc::new(Mutex::new(VecDeque::<f32>::with_capacity(
-        MAX_BUFFER_SAMPLES,
+        config.max_buffer_samples,
     )));
     let stream = build_output_stream(&device, Arc::clone(&queue), Arc::clone(&metrics))?;
     stream
@@ -375,7 +438,10 @@ fn run_receiver(
         .map_err(|error| format!("Failed to set socket timeout: {error}"))?;
 
     let mut packet_buffer = [0_u8; UDP_PACKET_SIZE];
-    let mut jitter = JitterBuffer::new(JITTER_STARTUP_PACKETS, JITTER_MAX_PENDING);
+    let mut jitter = JitterBuffer::new(
+        config.jitter_startup_packets,
+        config.jitter_max_pending_packets,
+    );
     let mut current_session: Option<u64> = None;
 
     while !stop.load(Ordering::Relaxed) {
@@ -414,8 +480,8 @@ fn run_receiver(
                                 &mut output,
                                 &metrics,
                             );
-                            if output.len() > MAX_BUFFER_SAMPLES {
-                                let overflow = output.len() - MAX_BUFFER_SAMPLES;
+                            if output.len() > config.max_buffer_samples {
+                                let overflow = output.len() - config.max_buffer_samples;
                                 for _ in 0..overflow {
                                     output.pop_front();
                                 }

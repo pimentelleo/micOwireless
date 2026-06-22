@@ -42,12 +42,14 @@ WebView2 is not bundled in the installer. If your environment does not have it, 
    - Choose output device:
      - `CABLE Input` (or equivalent) if you want to use it as a mic in other apps.
      - Speakers/headphones if you only want local monitoring.
+   - Optional (experimental): tune **Receiver Tuning** (jitter startup/max pending and max output buffer).
    - Optional: enable **Secure mode** and define a pair code.
    - Click **Start Receiver**.
 3. Install and open **micOwireless Mobile** on Android.
 4. In Mobile:
    - Tap **Discover** (or enter desktop IP + port manually).
    - If secure mode is on, use the same pair code.
+   - Optional (experimental): tune **Streaming Lab** (packet duration, mono/stereo, AGC/echo/noise processing).
    - Tap **Start Streaming**.
 5. In Discord/OBS/Meet, select the virtual cable output as the microphone input.
 
@@ -71,6 +73,10 @@ WebView2 is not bundled in the installer. If your environment does not have it, 
   - Prefer 5 GHz Wi-Fi.
   - Reduce network congestion.
   - Close CPU-heavy background apps.
+- Stream stops when Android screen turns off:
+  - Keep the app updated (Android now uses a foreground streaming service).
+  - Do not dismiss the persistent streaming notification while transmitting.
+  - Set battery mode to unrestricted for micOwireless on aggressive OEM ROMs.
 
 ## What it does (technical summary)
 
